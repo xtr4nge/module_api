@@ -1,6 +1,6 @@
 <?php
 /*
-    Copyright (C) 2013-2015 xtr4nge [_AT_] gmail.com
+    Copyright (C) 2013-2016 xtr4nge [_AT_] gmail.com
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ class WebService {
 		// Set up session
 		$this->s = new Requests_Session($this->global_webserver);
 		$this->s->headers['Accept'] = 'application/json';
-		$this->s->useragent = 'RESTful API [FruityWifi]';
+		$this->s->useragent = 'RESTful API [FruityWiFi]';
 		
 		// Set up login user/pass | token
 		$this->token = $token;
@@ -106,6 +106,15 @@ class WebService {
 		$this->loginCheck();
 		
 		$exec = "/sbin/ifconfig -a | cut -c 1-8 | sort | uniq -u |grep -v lo";
+		exec($exec, $output);
+		return json_encode($output);
+	}
+	
+	public function getInterface($iface)
+	{
+		$this->loginCheck();
+		
+		$exec = "/sbin/ifconfig $iface | grep 'inet addr' | awk -F: '{print $2}' | awk '{print $1}'";
 		exec($exec, $output);
 		return json_encode($output);
 	}
@@ -192,6 +201,29 @@ class WebService {
 		return json_encode($modules);
 	}
 	
+	public function getModulesAll()
+	{
+		$this->loginCheck();
+		
+		exec("find ../../../modules -name '_info_.php' | sort", $output);
+
+		for ($i=0; $i < count($output); $i++) {
+			include $output[$i];
+			
+			$ismoduleup = exec("$mod_isup");
+				
+			if ($ismoduleup != "") {
+				$output[0] = true;
+			} else {
+				$output[0] = false;
+			}
+			
+			$modules[] = array($mod_name => $output[0]);
+		}
+		
+		return json_encode($modules);
+	}
+	
 	public function getModuleStatus($module)
 	{
 		$this->loginCheck();
@@ -246,6 +278,8 @@ class WebService {
 			switch ($prop) {
 				case "iface":
 					$output[0] = $io_in_iface; break;
+				case "type":
+					$output[0] = $io_in_set; break;
 				case "ip":
 					$output[0] = $io_in_ip; break;
 				case "mask":
@@ -261,6 +295,8 @@ class WebService {
 			switch ($prop) {
 				case "iface":
 					$output[0] = $io_out_iface; break;
+				case "type":
+					$output[0] = $io_out_set; break;
 				case "ip":
 					$output[0] = $io_out_ip; break;
 				case "mask":
@@ -275,6 +311,33 @@ class WebService {
 		return json_encode($output);
 	}
 	
+	
+	public function getConfigInOutAll($io)
+	{
+		$this->loginCheck();
+		
+		include "../../../config/config.php";
+		
+		if ($io == "in") {
+			$output[0] = $io_in_iface;
+			$output[1] = $io_in_set;
+			$output[2] = $io_in_ip;
+			$output[3] = $io_in_mask;
+			$output[4] = $io_in_gw;
+		}
+		
+		if ($io == "out") {
+			$output[0] = $io_out_iface;
+			$output[1] = $io_out_set;
+			$output[2] = $io_out_ip;
+			$output[3] = $io_out_mask;
+			$output[4] = $io_out_gw;
+		}
+		
+		return json_encode($output);
+	}
+	
+	
 	public function setConfigInOut($io, $prop, $value)
 	{
 		$this->loginCheck();
@@ -284,6 +347,9 @@ class WebService {
 				case "iface":
 					$data = array('io_in_iface' => $value);
 					$output[0] = $io_in_iface; break;
+				case "type":
+					$data = array('io_in_set' => $value);
+					$output[0] = $io_in_set; break;
 				case "ip":
 					$data = array('io_in_ip' => $value);
 					$output[0] = $io_in_ip; break;
@@ -304,6 +370,9 @@ class WebService {
 				case "iface":
 					$data = array('io_out_iface' => $value);
 					$output[0] = $io_out_iface; break;
+				case "type":
+					$data = array('io_out_set' => $value);
+					$output[0] = $io_out_set; break;
 				case "ip":
 					$data = array('io_out_ip' => $value);
 					$output[0] = $io_out_ip; break;
@@ -378,6 +447,87 @@ class WebService {
 		*/
 	}
 	
+	public function getLogDHCP()
+	{
+		include "../../../config/config.php";
+		
+		$filename = "$log_path/dhcp.leases";
+		$fh = fopen($filename, "r"); //or die("Could not open file.");
+		if ( 0 < filesize( $filename ) ) {
+			$data = fread($fh, filesize($filename)); //or die("Could not read file.");
+		}
+		fclose($fh);
+		$data = explode("\n",$data);
+		
+		$output = [];
+		
+		for ($i=0; $i < count($data); $i++) {
+			$tmp = explode(" ", $data[$i]);
+			$output[] = $tmp[2] . " " . $tmp[1] . " " . $tmp[3];
+		}
+		
+		echo json_encode($output);
+	}
+	
+	public function getLogStation()
+	{		
+		include "../../../config/config.php";
+
+		exec("/sbin/iw dev $io_in_iface station dump |grep Stat", $stations);
+		
+		$output = [];
+		
+		for ($i=0; $i < count($stations); $i++) {
+			$output[] = str_replace("Station", "", $stations[$i]);
+		}
+
+		echo json_encode($output);		
+	}
+	
+	// STATUS
+	public function getStatusCPU()
+	{
+		include "functions.php";
+		
+		$exec = "mpstat | awk '\\$12 ~ /[0-9.]+/ { print 100 - \\$12 }'";
+		$out = exec_fruitywifi($exec);
+		
+		echo json_encode($out);
+	}
+	
+	public function getStatusMEM()
+	{
+		include "functions.php";
+		
+		$exec = "free | grep Mem | awk '{print \\$3/\\$2 * 100.0}'";
+		$out = exec_fruitywifi($exec);
+		
+		echo json_encode($out);
+	}
+	
+	// SET CONFIG
+	public function setConfigCore($param, $value)
+	{
+		include "functions.php";
+		
+		$exec = "/bin/sed -i 's/$param=.*/$param=\\\"".$value."\\\";/g' /usr/share/fruitywifi/www/config/config.php";
+		exec_fruitywifi($exec);
+		
+		echo json_encode($value);
+	}
+	
+	public function setConfigModule($module, $param, $value)
+	{
+		include "functions.php";
+		
+		$exec = "/bin/sed -i 's/$param=.*/$param=\\\"".$value."\\\";/g' /usr/share/fruitywifi/www/modules/$module/_info_.php";
+		exec_fruitywifi($exec);
+		
+		echo json_encode($value);
+	}
+	
 }
+
+
 
 ?>
