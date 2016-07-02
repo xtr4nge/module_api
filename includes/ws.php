@@ -201,7 +201,7 @@ class WebService {
 		return json_encode($modules);
 	}
 	
-	public function getModulesAll()
+	public function getModulesAllBACK()
 	{
 		$this->loginCheck();
 		
@@ -222,6 +222,44 @@ class WebService {
 		}
 		
 		return json_encode($modules);
+	}
+	
+	public function getModulesAll()
+	{
+		$this->loginCheck();
+		
+		exec("find ../../../modules -name '_info_.php' | sort", $output);
+		
+		for ($i=0; $i < count($output); $i++) {
+			include $output[$i];
+			
+			$module = [];
+			
+			$ismoduleup = exec("$mod_isup");
+			
+			if (!isset($mod_group)) {
+				$mod_group = "";
+			}
+				
+			if ($ismoduleup != "") {
+				$output[0] = true;
+			} else {
+				$output[0] = false;
+			}
+			
+			$modules[] = array("name" => $mod_name,
+							   "alias" => $mod_alias,
+							   "status" => $output[0],
+							   "panel" => $mod_panel,
+							   "logs" => $mod_logs,
+							   "group" => $mod_group
+							   );
+			
+			$mod_group = "";
+		}
+		
+		return json_encode($modules);
+	
 	}
 	
 	public function getModuleStatus($module)
@@ -487,7 +525,7 @@ class WebService {
 	// STATUS
 	public function getStatusCPU()
 	{
-		include "functions.php";
+		//include "functions.php";
 		
 		$exec = "mpstat | awk '\\$12 ~ /[0-9.]+/ { print 100 - \\$12 }'";
 		$out = exec_fruitywifi($exec);
@@ -497,18 +535,75 @@ class WebService {
 	
 	public function getStatusMEM()
 	{
-		include "functions.php";
+		//include "functions.php";
 		
 		$exec = "free | grep Mem | awk '{print \\$3/\\$2 * 100.0}'";
+		$exec = "free | awk 'FNR == 3 {print \\$3/(\\$3+\\$4)*100}'";
 		$out = exec_fruitywifi($exec);
 		
 		echo json_encode($out);
 	}
 	
-	// SET CONFIG
+	// GET VARS FROM CONFIG FILE
+	private function loadVariables($load_file) {
+        include $load_file;
+        
+        $all_vars = get_defined_vars();
+		$exclude = ["version", "regex", "regex_extra", "codename", "root_path", "root_web", "log_path", "core_name", "core_alias", "api_token",
+						"bin_", "mod_name", "mod_version", "mod_path", "mod_logs", "mod_logs_history", "mod_logs_panel", "mod_panel", "mod_isup", "mod_alias"];
+		$file = fopen($load_file, "r");
+		$output = [];
+		
+		while(!feof($file)){
+			
+			$line = fgets($file);
+			$line = trim($line);
+			
+			$show_var = True;
+			if (0 === strpos($line, '$')) {
+				foreach ($exclude as $value) {
+					if ((0 === strpos($line, "$$value"))) {
+						$show_var = False;
+					 }
+				}
+				
+				if ($show_var) {
+					$temp = explode("=", $line);
+					$var = str_replace("$","",$temp[0]);
+					$value = $all_vars[$var];
+					//echo "$var | $value";
+					//echo "<br>";
+					$output[$var] = $value;
+				}
+			}
+		}
+		fclose($file);
+		return $output;
+	}
+	
+    // GET CONFIG ALL [CORE]
+	public function getConfigCoreAll()
+	{
+		$output = $this->loadVariables("/usr/share/fruitywifi/www/config/config.php");
+		
+		//$output = ${$param};
+		echo json_encode($output);
+	}
+    
+	// GET CONFIG [CORE]
+	public function getConfigCore($param)
+	{
+		//include "functions.php";
+		include "/usr/share/fruitywifi/www/config/config.php";
+		
+		$output = ${$param};
+		echo json_encode($output);
+	}
+	
+	// SET CONFIG [CORE]
 	public function setConfigCore($param, $value)
 	{
-		include "functions.php";
+		//include "functions.php";
 		
 		$exec = "/bin/sed -i 's/$param=.*/$param=\\\"".$value."\\\";/g' /usr/share/fruitywifi/www/config/config.php";
 		exec_fruitywifi($exec);
@@ -516,14 +611,45 @@ class WebService {
 		echo json_encode($value);
 	}
 	
+	// GET CONFIG ALL [MODULE]
+	public function getConfigModuleAll($module)
+	{
+		$output = $this->loadVariables("/usr/share/fruitywifi/www/modules/$module/_info_.php");
+		
+		//$output = ${$param};
+		echo json_encode($output);
+	}
+	
+	// GET CONFIG [MODULE]
+	public function getConfigModule($module, $param)
+	{
+		//include "functions.php";
+		include "/usr/share/fruitywifi/www/modules/$module/_info_.php";
+		
+		$output = ${$param};
+		echo json_encode($output);
+	}
+	
+	// SET CONFIG [MODULE]
 	public function setConfigModule($module, $param, $value)
 	{
-		include "functions.php";
+		//include_once "functions.php";
 		
 		$exec = "/bin/sed -i 's/$param=.*/$param=\\\"".$value."\\\";/g' /usr/share/fruitywifi/www/modules/$module/_info_.php";
 		exec_fruitywifi($exec);
 		
 		echo json_encode($value);
+	}
+	
+	// SET MONITOR MODE
+	public function setMonitorMode($iface, $action)
+	{
+		//include "../../../functions.php";
+		
+		if ($action == "start") start_monitor_mode($iface);
+		if ($action == "stop") stop_monitor_mode($iface);
+		
+		echo json_encode(true);
 	}
 	
 }

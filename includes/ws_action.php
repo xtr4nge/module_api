@@ -159,18 +159,51 @@ if (sizeof($api) == 3 and $api[1] == "status" and $api[2] == "mem")
 	echo $ws->getStatusMEM();
 }
 
-// CONFIG
+// CONFIG CORE
 
-if (sizeof($api) == 5 and $api[1] == "config" and $api[2] != "core" and $api[3] != "" and $api[4] != "")
+if (sizeof($api) == 3 and $api[1] == "config" and $api[2] == "core")
 {
-	# example: /config/io_mode/1
+	# example: /config/core
+	echo $ws->getConfigCoreAll();
+}
+
+if (sizeof($api) == 4 and $api[1] == "config" and $api[2] == "core" and $api[3] != "")
+{
+	# example: /config/core/hostapd_ssid
+	echo $ws->getConfigCore($api[3]);
+}
+
+if (sizeof($api) == 5 and $api[1] == "config" and $api[2] == "core" and $api[3] != "" and $api[4] != "")
+{
+	# example: /config/core/io_mode/1
 	echo $ws->setConfigCore($api[3], $api[4]);
+}
+
+// CONFIG MODULES
+if (sizeof($api) == 4 and $api[1] == "config" and $api[2] == "module" and $api[3] != "")
+{
+	# example: /config/module/ap/mod_dns_type
+	echo $ws->getConfigModuleAll($api[3]);
+}
+
+if (sizeof($api) == 5 and $api[1] == "config" and $api[2] == "module" and $api[3] != "")
+{
+	# example: /config/module/ap/mod_dns_type
+	echo $ws->getConfigModule($api[3], $api[4]);
 }
 
 if (sizeof($api) == 6 and $api[1] == "config" and $api[2] == "module" and $api[3] != "" and $api[4] != "" and $api[5] != "")
 {
 	# example: /config/module/ap/mod_filter_station/1
 	echo $ws->setConfigModule($api[3], $api[4], $api[5]);
+}
+
+// MONITOR MODE
+
+if (sizeof($api) == 4 and $api[1] == "monitor" and $api[2] != "" and $api[3] != "")
+{
+	# example: /monitor/wlan1/start|stop
+	echo $ws->setMonitorMode($api[2], $api[3]);
 }
 
 ?>
